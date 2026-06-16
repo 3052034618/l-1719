@@ -96,7 +96,18 @@ export default function Reports() {
     try {
       const res = fetch('/api/reports/vehicle-type-stats');
       const data = await (await res).json();
-      setVehicleTypeData(data || [
+      const typeColors: Record<string, string> = {
+        economy: '#3b82f6',
+        comfort: '#10b981',
+        luxury: '#f59e0b',
+        suv: '#8b5cf6',
+      };
+      const pieData = (data || []).map((item: any) => ({
+        name: item.type_label || item.typeLabel || item.vehicle_type || item.type,
+        value: item.total_count || item.totalCount || 0,
+        color: typeColors[item.vehicle_type || item.type] || PIE_COLORS[0],
+      }));
+      setVehicleTypeData(pieData.length > 0 ? pieData : [
         { name: '经济型', value: 35, color: '#3b82f6' },
         { name: '紧凑型', value: 25, color: '#10b981' },
         { name: '标准型', value: 20, color: '#f59e0b' },
@@ -149,10 +160,10 @@ export default function Reports() {
       const startX = 20;
 
       const metrics = [
-        { label: 'Rental Rate', value: `${monthlySummary?.rentalRate || 25}%`, color: [59, 130, 246] },
-        { label: 'Revenue', value: `¥${(monthlySummary?.totalRevenue || 2600).toLocaleString()}`, color: [16, 185, 129] },
-        { label: 'Orders', value: `${monthlySummary?.completedBookings || 3}`, color: [245, 158, 11] },
-        { label: 'Failure Rate', value: `${monthlySummary?.failureRate || 5}%`, color: [139, 92, 246] },
+        { label: 'Rental Rate', value: `${monthlySummary?.rental_rate || monthlySummary?.rentalRate || 25}%`, color: [59, 130, 246] },
+        { label: 'Revenue', value: `¥${((monthlySummary?.total_revenue || monthlySummary?.totalRevenue || 26000) / 1000).toFixed(0)}K`, color: [16, 185, 129] },
+        { label: 'Orders', value: `${monthlySummary?.completed_bookings || monthlySummary?.completedBookings || 30}`, color: [245, 158, 11] },
+        { label: 'Failure Rate', value: `${monthlySummary?.failure_rate || monthlySummary?.failureRate || 5}%`, color: [139, 92, 246] },
       ];
 
       metrics.forEach((metric, index) => {
@@ -380,24 +391,24 @@ export default function Reports() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-5 text-white">
               <p className="text-blue-100 text-sm">本月出租率</p>
-              <p className="text-3xl font-bold mt-1">{monthlySummary.rentalRate || 0}%</p>
+              <p className="text-3xl font-bold mt-1">{monthlySummary.rental_rate || monthlySummary.rentalRate || 0}%</p>
               <p className="text-blue-200 text-xs mt-2">↑ 同比 +5.2%</p>
             </div>
             <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-5 text-white">
               <p className="text-emerald-100 text-sm">本月收入</p>
               <p className="text-3xl font-bold mt-1">
-                ¥{(monthlySummary.totalRevenue || 0).toLocaleString()}
+                ¥{(monthlySummary.total_revenue || monthlySummary.totalRevenue || 0).toLocaleString()}
               </p>
               <p className="text-emerald-200 text-xs mt-2">↑ 同比 +8.7%</p>
             </div>
             <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-5 text-white">
               <p className="text-amber-100 text-sm">完成订单</p>
-              <p className="text-3xl font-bold mt-1">{monthlySummary.completedBookings || 0}</p>
+              <p className="text-3xl font-bold mt-1">{monthlySummary.completed_bookings || monthlySummary.completedBookings || 0}</p>
               <p className="text-amber-200 text-xs mt-2">↑ 环比 +3.5%</p>
             </div>
             <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-5 text-white">
               <p className="text-purple-100 text-sm">故障率</p>
-              <p className="text-3xl font-bold mt-1">{monthlySummary.failureRate || 0}%</p>
+              <p className="text-3xl font-bold mt-1">{monthlySummary.failure_rate || monthlySummary.failureRate || 0}%</p>
               <p className="text-purple-200 text-xs mt-2">↓ 同比 -1.2%</p>
             </div>
           </div>

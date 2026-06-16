@@ -18,10 +18,18 @@ export default function Rental() {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [checkResult, setCheckResult] = useState<any>(null);
   const [checking, setChecking] = useState(false);
+  const [showContract, setShowContract] = useState(false);
+  const [contractData, setContractData] = useState<any>(null);
 
   useEffect(() => {
     loadBookings();
   }, [activeTab]);
+
+  useEffect(() => {
+    if (selectedBooking && activeTab === 'pickup') {
+      handleCheckLicense(selectedBooking.id);
+    }
+  }, [selectedBooking, activeTab]);
 
   const loadBookings = async () => {
     try {
@@ -60,11 +68,27 @@ export default function Rental() {
         body: JSON.stringify({ bookingId }),
       });
       if (res.ok) {
+        const data = await res.json();
+        setContractData(data.contract);
+        setShowContract(true);
         await loadBookings();
         setCheckResult(null);
       }
     } catch (error) {
       console.error('Failed to pickup:', error);
+    }
+  };
+
+  const handleGenerateContract = async (bookingId: string) => {
+    try {
+      const res = await fetch(`/api/rental/contract/${bookingId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setContractData(data);
+        setShowContract(true);
+      }
+    } catch (error) {
+      console.error('Failed to generate contract:', error);
     }
   };
 
@@ -183,19 +207,25 @@ export default function Rental() {
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-500">姓名</span>
                         <span className="text-sm font-medium text-gray-800">
-                          {selectedBooking.customer_name || '张先生'}
+                          {checkResult?.customer?.name || selectedBooking.customer_name || '张先生'}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-500">手机号</span>
                         <span className="text-sm text-gray-800">
-                          {selectedBooking.phone || '138****8888'}
+                          {checkResult?.customer?.phone || selectedBooking.phone || '138****8888'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm text-gray-500">身份证号</span>
+                        <span className="text-sm text-gray-800 font-mono">
+                          {checkResult?.customer?.idCard || '110101********1234'}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-500">驾照号</span>
                         <span className="text-sm text-gray-800 font-mono">
-                          {selectedBooking.license_number || '110101********1234'}
+                          {checkResult?.customer?.driverLicense || selectedBooking.license_number || '110101********1234'}
                         </span>
                       </div>
                     </div>
@@ -296,23 +326,18 @@ export default function Rental() {
                         </div>
 
                         <div className="flex gap-3">
-                          {checkResult.canPickup ? (
-                            <button
-                              onClick={() => handlePickup(selectedBooking.id)}
-                              className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                            >
-                              <CheckCircle size={18} />
-                              确认取车
-                            </button>
-                          ) : (
-                            <button
-                              disabled
-                              className="flex-1 py-2.5 bg-gray-300 text-gray-500 font-medium rounded-lg cursor-not-allowed"
-                            >
-                              资质校验未通过
-                            </button>
-                          )}
-                          <button className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2">
+                          <button
+                            onClick={() => handlePickup(selectedBooking.id)}
+                            className="flex-1 py-2.5 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                          >
+                            <CheckCircle size={18} />
+                            确认取车
+                            {checkResult?.needsDeposit && `(含押金¥${checkResult.depositAmount})`}
+                          </button>
+                          <button
+                            onClick={() => handleGenerateContract(selectedBooking.id)}
+                            className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+                          >
                             <FileText size={18} />
                             生成合同
                           </button>
@@ -406,6 +431,141 @@ export default function Rental() {
           </div>
         </div>
       </div>
+
+      {showContract && contractData && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-800">电子合同</h3>
+              <button
+                onClick={() => setShowContract(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-6 space-y-6">
+              <div className="text-center border-b border-gray-200 pb-4">
+                <h4 className="text-xl font-bold text-gray-800">汽车租赁合同</h4>
+                <p className="text-sm text-gray-500 mt-1">
+                  合同编号: {contractData.contractNumber || contractData.contract_number}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <h5 className="font-medium text-gray-700">承租方信息</h5>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">姓名</span>
+                    <span className="text-gray-800 font-medium">
+                      {contractData.customerName || contractData.customer?.name}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">身份证号</span>
+                    <span className="text-gray-800 font-mono">
+                      {contractData.customerIdCard || contractData.customer?.idCard}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">驾驶证号</span>
+                    <span className="text-gray-800 font-mono">
+                      {contractData.customer?.driverLicense || '-'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">联系电话</span>
+                    <span className="text-gray-800">
+                      {contractData.customer?.phone || '-'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h5 className="font-medium text-gray-700">租赁车辆信息</h5>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">车牌号</span>
+                    <span className="text-gray-800 font-medium">
+                      {contractData.vehiclePlate || contractData.vehicle?.plateNumber}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">车辆品牌</span>
+                    <span className="text-gray-800">
+                      {contractData.vehicleBrand || contractData.vehicle?.brand}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">车辆型号</span>
+                    <span className="text-gray-800">
+                      {contractData.vehicleModel || contractData.vehicle?.model}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h5 className="font-medium text-gray-700">租赁信息</h5>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">取车时间</span>
+                    <span className="text-gray-800">
+                      {dayjs(contractData.pickupTime || contractData.rental?.pickupTime).format('YYYY-MM-DD HH:mm')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">预计还车时间</span>
+                    <span className="text-gray-800">
+                      {dayjs(contractData.expectedReturnTime || contractData.rental?.expectedReturnTime).format('YYYY-MM-DD HH:mm')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">日租金</span>
+                    <span className="text-gray-800">
+                      ¥{contractData.dailyRate || contractData.rental?.dailyRate || 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">押金</span>
+                    <span className="text-gray-800">
+                      ¥{contractData.deposit || contractData.rental?.deposit || 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-gray-200">
+                    <span className="text-gray-600 font-medium">预计总费用</span>
+                    <span className="text-blue-600 font-bold">
+                      ¥{contractData.estimatedAmount || contractData.rental?.estimatedAmount || 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <h5 className="font-medium text-gray-700">合同条款</h5>
+                <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm text-gray-600">
+                  {(contractData.terms || []).map((term: string, idx: number) => (
+                    <p key={idx}>{term}</p>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => setShowContract(false)}
+                  className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition-colors"
+                >
+                  关闭
+                </button>
+                <button className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors">
+                  下载合同
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -11,8 +11,13 @@ router.get('/plans', (req, res) => {
   const params: any[] = [];
   
   if (status) {
-    query += ' AND status = ?';
-    params.push(status);
+    if (status === 'pending') {
+      query += ' AND status = ?';
+      params.push('pending_approval');
+    } else {
+      query += ' AND status = ?';
+      params.push(status);
+    }
   }
   if (date) {
     query += ' AND date = ?';
@@ -23,22 +28,34 @@ router.get('/plans', (req, res) => {
   
   const plans = db.prepare(query).all(...params);
   
-  const plansWithAssignments = plans.map((plan: any) => {
+  const plansWithDetails = plans.map((plan: any) => {
     const assignments = db.prepare(`
       SELECT da.*, b.customer_id, b.vehicle_type, b.pickup_time as booking_pickup_time,
-             c.name as customer_name, v.plate_number, v.brand, v.model
+             b.estimated_amount, c.name as customer_name, v.plate_number, v.brand, v.model, v.daily_rate,
+             s.name as store_name
       FROM dispatch_assignments da
       JOIN bookings b ON da.booking_id = b.id
       JOIN customers c ON b.customer_id = c.id
       LEFT JOIN vehicles v ON da.vehicle_id = v.id
+      LEFT JOIN stores s ON da.store_id = s.id
       WHERE da.plan_id = ?
       ORDER BY da.pickup_time
     `).all(plan.id);
     
-    return { ...plan, assignments };
+    const expectedRevenue = assignments.reduce((sum: number, a: any) => {
+      return sum + (a.estimated_amount || 0);
+    }, 0);
+    
+    return {
+      ...plan,
+      assignments,
+      total_assignments: assignments.length,
+      expected_revenue: expectedRevenue,
+      plan_date: plan.date,
+    };
   });
   
-  res.json(plansWithAssignments);
+  res.json(plansWithDetails);
 });
 
 router.post('/generate', (req, res) => {
@@ -164,6 +181,8 @@ router.post('/plans/:id/push', (req, res) => {
   if ((plan as any).status !== 'approved') {
     return res.status(400).json({ error: '方案未审批，无法推送' });
   }
+  
+  db.prepare("UPDATE dispatch_plans SET status = 'pushed' WHERE id = ?").run(req.params.id);
   
   const assignments = db.prepare(`
     SELECT da.*, s.name as store_name

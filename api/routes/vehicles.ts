@@ -42,7 +42,7 @@ router.get('/locations', (req, res) => {
   
   res.json(vehicles.map((v: any) => ({
     id: v.id,
-    plateNumber: v.plate_number,
+    plate_number: v.plate_number,
     status: v.status,
     lat: v.lat,
     lng: v.lng,

@@ -32,13 +32,14 @@ export default function Accidents() {
     try {
       const params = new URLSearchParams();
       if (statusFilter !== 'all') {
-        params.append('status', statusFilter);
+        params.append('claimStatus', statusFilter);
       }
       const res = await fetch(`/api/accidents?${params}`);
       const data = await res.json();
-      setAccidents(data);
-      if (data.length > 0) {
-        setSelectedAccident(data[0]);
+      const list = data.data || data || [];
+      setAccidents(list);
+      if (list.length > 0) {
+        setSelectedAccident(list[0]);
       }
     } catch (error) {
       console.error('Failed to load accidents:', error);
@@ -47,9 +48,54 @@ export default function Accidents() {
     }
   };
 
+  const getPlateNumber = (a: any) => a.plate_number || a.vehicle_plate || '';
+  const getAccidentDate = (a: any) => a.date || a.accident_time || '';
+  const getClaimStatus = (a: any) => {
+    const status = a.claim_status || a.status || 'filed';
+    const statusMap: Record<string, string> = {
+      filed: 'reported',
+      processing: 'investigating',
+      reviewing: 'insurance_claim',
+      approved: 'settled',
+      rejected: 'closed',
+      closed: 'closed',
+      reported: 'reported',
+      investigating: 'investigating',
+      insurance_claim: 'insurance_claim',
+      settled: 'settled',
+    };
+    return statusMap[status] || status;
+  };
+
+  const claimStatusToApi = (status: string) => {
+    const map: Record<string, string> = {
+      reported: 'filed',
+      investigating: 'processing',
+      insurance_claim: 'reviewing',
+      settled: 'approved',
+      closed: 'closed',
+    };
+    return map[status] || status;
+  };
+
+  const handleUpdateClaimStatus = async (accidentId: string, newStatus: string) => {
+    try {
+      const res = await fetch(`/api/accidents/${accidentId}/claim-status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ claimStatus: claimStatusToApi(newStatus) }),
+      });
+      if (res.ok) {
+        await loadAccidents();
+      }
+    } catch (error) {
+      console.error('Failed to update claim status:', error);
+    }
+  };
+
   const filteredAccidents = accidents.filter(
-    (a) =>
-      a.vehicle_plate?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (a: any) =>
+      getPlateNumber(a).toLowerCase().includes(searchTerm.toLowerCase()) ||
       a.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -109,7 +155,10 @@ export default function Accidents() {
               <div>
                 <p className="text-sm text-gray-500">处理中</p>
                 <p className="text-2xl font-bold text-gray-800">
-                  {accidents.filter((a) => a.status !== 'closed').length}
+                  {accidents.filter((a: any) => {
+                    const status = getClaimStatus(a);
+                    return status !== 'settled' && status !== 'closed';
+                  }).length}
                 </p>
               </div>
             </div>
@@ -122,7 +171,7 @@ export default function Accidents() {
               <div>
                 <p className="text-sm text-gray-500">理赔中</p>
                 <p className="text-2xl font-bold text-gray-800">
-                  {accidents.filter((a) => a.claim_status === 'pending').length}
+                  {accidents.filter((a: any) => getClaimStatus(a) === 'insurance_claim').length}
                 </p>
               </div>
             </div>
@@ -135,7 +184,10 @@ export default function Accidents() {
               <div>
                 <p className="text-sm text-gray-500">已结案</p>
                 <p className="text-2xl font-bold text-gray-800">
-                  {accidents.filter((a) => a.status === 'closed').length}
+                  {accidents.filter((a: any) => {
+                    const status = getClaimStatus(a);
+                    return status === 'settled' || status === 'closed';
+                  }).length}
                 </p>
               </div>
             </div>
@@ -201,15 +253,15 @@ export default function Accidents() {
                     <div>
                       <p className="font-medium text-gray-800 text-sm">{accident.id}</p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        {accident.vehicle_plate || '京A12345'}
+                        {getPlateNumber(accident)}
                       </p>
                     </div>
                     <span
                       className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        statusColors[accident.status]
+                        statusColors[getClaimStatus(accident)]
                       }`}
                     >
-                      {statusLabels[accident.status]}
+                      {statusLabels[getClaimStatus(accident)]}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -218,10 +270,10 @@ export default function Accidents() {
                         severityColors[accident.severity]
                       }`}
                     >
-                      {severityLabels[accident.severity]}
+                      {severityLabels[accident.severity] || '轻微'}
                     </span>
                     <span className="text-xs text-gray-400">
-                      {dayjs(accident.accident_time).format('MM-DD HH:mm')}
+                      {dayjs(getAccidentDate(accident)).format('MM-DD HH:mm')}
                     </span>
                   </div>
                 </div>
@@ -240,17 +292,17 @@ export default function Accidents() {
                   <div className="flex items-center gap-2">
                     <span
                       className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        statusColors[selectedAccident.status]
+                        statusColors[getClaimStatus(selectedAccident)]
                       }`}
                     >
-                      {statusLabels[selectedAccident.status]}
+                      {statusLabels[getClaimStatus(selectedAccident)]}
                     </span>
                     <span
                       className={`px-3 py-1 rounded-full text-sm font-medium ${
                         severityColors[selectedAccident.severity]
                       }`}
                     >
-                      {severityLabels[selectedAccident.severity]}
+                      {severityLabels[selectedAccident.severity] || '轻微'}
                     </span>
                   </div>
                 </div>
@@ -265,13 +317,13 @@ export default function Accidents() {
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-500">车牌号</span>
                         <span className="text-sm font-medium text-gray-800">
-                          {selectedAccident.vehicle_plate || '京A12345'}
+                          {getPlateNumber(selectedAccident)}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-500">车型</span>
+                        <span className="text-sm text-gray-500">品牌型号</span>
                         <span className="text-sm text-gray-800">
-                          {selectedAccident.vehicle_type || '经济型'}
+                          {selectedAccident.brand} {selectedAccident.model}
                         </span>
                       </div>
                     </div>
@@ -286,13 +338,13 @@ export default function Accidents() {
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-500">发生时间</span>
                         <span className="text-sm text-gray-800">
-                          {dayjs(selectedAccident.accident_time).format('YYYY-MM-DD HH:mm')}
+                          {dayjs(getAccidentDate(selectedAccident)).format('YYYY-MM-DD HH:mm')}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-500">地点</span>
                         <span className="text-sm text-gray-800">
-                          {selectedAccident.location || '北京市朝阳区'}
+                          {selectedAccident.location || '-'}
                         </span>
                       </div>
                     </div>
@@ -317,37 +369,33 @@ export default function Accidents() {
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-500">保险公司</span>
                         <span className="text-sm text-gray-800">
-                          {selectedAccident.insurance_company || '平安保险'}
+                          {selectedAccident.insurance_company || '-'}
                         </span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-sm text-gray-500">保单号</span>
+                        <span className="text-sm text-gray-500">理赔单号</span>
                         <span className="text-sm text-gray-800 font-mono">
-                          {selectedAccident.insurance_policy || 'PA20240101'}
+                          {selectedAccident.claim_number || '-'}
                         </span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-gray-500">理赔状态</span>
                         <span
                           className={`text-sm font-medium ${
-                            selectedAccident.claim_status === 'completed'
+                            getClaimStatus(selectedAccident) === 'settled'
                               ? 'text-green-600'
-                              : selectedAccident.claim_status === 'pending'
+                              : getClaimStatus(selectedAccident) === 'insurance_claim' || getClaimStatus(selectedAccident) === 'investigating'
                               ? 'text-amber-600'
                               : 'text-gray-600'
                           }`}
                         >
-                          {selectedAccident.claim_status === 'completed'
-                            ? '已理赔'
-                            : selectedAccident.claim_status === 'pending'
-                            ? '理赔中'
-                            : '未申请'}
+                          {statusLabels[getClaimStatus(selectedAccident)]}
                         </span>
                       </div>
                       <div className="flex justify-between pt-2 border-t border-gray-200">
-                        <span className="text-sm font-medium text-gray-700">预估费用</span>
+                        <span className="text-sm font-medium text-gray-700">理赔金额</span>
                         <span className="text-sm font-bold text-blue-600">
-                          ¥{selectedAccident.estimated_cost?.toLocaleString() || 0}
+                          ¥{(selectedAccident.claim_amount || 0).toLocaleString()}
                         </span>
                       </div>
                     </div>
@@ -382,11 +430,19 @@ export default function Accidents() {
                 </div>
 
                 <div className="flex gap-3">
-                  <button className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors">
-                    更新理赔状态
-                  </button>
+                  <select
+                    value={getClaimStatus(selectedAccident)}
+                    onChange={(e) => handleUpdateClaimStatus(selectedAccident.id, e.target.value)}
+                    className="flex-1 px-4 py-2.5 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500"
+                  >
+                    <option value="reported">已上报</option>
+                    <option value="investigating">调查中</option>
+                    <option value="insurance_claim">理赔中</option>
+                    <option value="settled">已解决</option>
+                    <option value="closed">已结案</option>
+                  </select>
                   <button className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-                    结案
+                    查看详情
                   </button>
                 </div>
               </>

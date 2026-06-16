@@ -73,6 +73,21 @@ export default function Dispatch() {
     }
   };
 
+  const handleReject = async (planId: string) => {
+    try {
+      const res = await fetch(`/api/dispatch/plans/${planId}/approve`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved: false }),
+      });
+      if (res.ok) {
+        await loadPlans();
+      }
+    } catch (error) {
+      console.error('Failed to reject plan:', error);
+    }
+  };
+
   const handlePush = async (planId: string) => {
     try {
       const res = await fetch(`/api/dispatch/plans/${planId}/push`, {
@@ -90,14 +105,24 @@ export default function Dispatch() {
   const filteredPlans =
     filterStatus === 'all'
       ? plans
-      : plans.filter((p) => p.status === filterStatus);
+      : plans.filter((p) => {
+          if (filterStatus === 'pending') {
+            return p.status === 'pending' || p.status === 'pending_approval';
+          }
+          return p.status === filterStatus;
+        });
+
+  const getStatusKey = (status: string) => {
+    if (status === 'pending_approval') return 'pending';
+    return status;
+  };
 
   const statusColors: Record<string, string> = {
     draft: 'bg-gray-100 text-gray-700',
     pending: 'bg-amber-100 text-amber-700',
     approved: 'bg-blue-100 text-blue-700',
     pushed: 'bg-green-100 text-green-700',
-    cancelled: 'bg-red-100 text-red-700',
+    rejected: 'bg-red-100 text-red-700',
   };
 
   const statusLabels: Record<string, string> = {
@@ -105,7 +130,7 @@ export default function Dispatch() {
     pending: '待审批',
     approved: '已批准',
     pushed: '已推送',
-    cancelled: '已取消',
+    rejected: '已驳回',
   };
 
   return (
@@ -172,10 +197,10 @@ export default function Dispatch() {
                     </div>
                     <span
                       className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        statusColors[plan.status]
+                        statusColors[getStatusKey(plan.status)]
                       }`}
                     >
-                      {statusLabels[plan.status]}
+                      {statusLabels[getStatusKey(plan.status)]}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs text-gray-500">
@@ -205,7 +230,7 @@ export default function Dispatch() {
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {selectedPlan.status === 'pending' && (
+                    {getStatusKey(selectedPlan.status) === 'pending' && (
                       <>
                         <button
                           onClick={() => handleApprove(selectedPlan.id)}
@@ -214,7 +239,10 @@ export default function Dispatch() {
                           <CheckCircle size={16} />
                           审批通过
                         </button>
-                        <button className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-lg transition-colors">
+                        <button
+                          onClick={() => handleReject(selectedPlan.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-lg transition-colors"
+                        >
                           <XCircle size={16} />
                           驳回
                         </button>
@@ -265,10 +293,10 @@ export default function Dispatch() {
                           </div>
                           <div>
                             <p className="font-medium text-gray-800">
-                              {assignment.vehicle_plate || '京A12345'}
+                              {assignment.plate_number || '未分配'}
                             </p>
                             <p className="text-xs text-gray-500">
-                              {assignment.vehicle_type || '经济型 · 丰田卡罗拉'}
+                              {assignment.vehicle_type || '经济型'}
                             </p>
                           </div>
                         </div>

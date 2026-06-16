@@ -4,7 +4,7 @@ export type VehicleType = 'economy' | 'comfort' | 'luxury' | 'suv';
 export type BookingStatus = 'pending' | 'confirmed' | 'active' | 'completed' | 'cancelled';
 export type MaintenanceStatus = 'pending' | 'in_progress' | 'completed';
 export type MaintenanceType = 'routine' | 'repair' | 'inspection';
-export type DispatchPlanStatus = 'draft' | 'pending' | 'approved' | 'rejected';
+export type DispatchPlanStatus = 'draft' | 'pending' | 'pending_approval' | 'approved' | 'rejected' | 'pushed';
 export type AccidentSeverity = 'minor' | 'moderate' | 'severe';
 export type ClaimStatus = 'filed' | 'pending' | 'processing' | 'approved' | 'rejected' | 'completed';
 export type UserRole = 'admin' | 'manager' | 'store_admin' | 'finance' | 'engineer';
@@ -193,11 +193,14 @@ export interface AccidentRecord {
   created_at: string;
   status?: AccidentStatus;
   vehicle_plate?: string;
+  plate_number?: string;
   customer_name?: string;
   accident_time?: string;
   vehicle_type?: string;
   insurance_policy?: string;
   estimated_cost?: number;
+  brand?: string;
+  model?: string;
 }
 
 export interface User {

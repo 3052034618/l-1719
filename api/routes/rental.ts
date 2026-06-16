@@ -5,32 +5,61 @@ import db, { generateId } from '../db.js';
 const router = Router();
 
 router.get('/check-license', (req, res) => {
-  const { licenseNumber, idCard } = req.query;
+  const { licenseNumber, idCard, bookingId } = req.query;
   
-  const customer = db.prepare(`
-    SELECT * FROM customers 
-    WHERE driver_license = ? AND id_card = ?
-  `).get(licenseNumber, idCard);
+  let customer;
   
-  if (!customer) {
-    return res.json({ valid: false, message: '驾照信息不匹配' });
+  if (bookingId) {
+    const booking = db.prepare(`
+      SELECT b.*, c.*
+      FROM bookings b
+      JOIN customers c ON b.customer_id = c.id
+      WHERE b.id = ?
+    `).get(bookingId);
+    
+    if (!booking) {
+      return res.status(404).json({ valid: false, message: '预订不存在' });
+    }
+    
+    customer = booking;
+  } else if (licenseNumber && idCard) {
+    customer = db.prepare(`
+      SELECT * FROM customers 
+      WHERE driver_license = ? AND id_card = ?
+    `).get(licenseNumber, idCard);
+    
+    if (!customer) {
+      return res.json({ valid: false, message: '驾照信息不匹配' });
+    }
+  } else {
+    return res.status(400).json({ valid: false, message: '参数不完整' });
   }
   
   const c = customer as any;
   
+  const hasViolation = !!c.has_violation;
+  const creditScore = c.credit_score || 0;
+  const needsDeposit = creditScore < 650 || hasViolation;
+  const depositAmount = creditScore < 650 ? 5000 : (hasViolation ? 3000 : 0);
+  
   res.json({
     valid: true,
+    licenseValid: true,
+    violations: hasViolation ? 2 : 0,
+    hasViolation,
+    creditScore,
+    needsDeposit,
+    depositAmount,
+    canPickup: true,
     customer: {
       id: c.id,
       name: c.name,
-      creditScore: c.credit_score,
-      hasViolation: !!c.has_violation,
+      phone: c.phone,
+      idCard: c.id_card,
+      driverLicense: c.driver_license,
+      creditScore,
       totalRentals: c.total_rentals,
     },
-    creditScore: c.credit_score,
-    hasViolation: !!c.has_violation,
-    depositRequired: c.credit_score < 650 || !!c.has_violation,
-    depositAmount: c.credit_score < 650 ? 5000 : (c.has_violation ? 3000 : 0),
   });
 });
 

@@ -39,7 +39,7 @@ export default function Maintenance() {
       }
       const res = await fetch(`/api/maintenance/orders?${params}`);
       const data = await res.json();
-      setOrders(data);
+      setOrders(data.data || data || []);
     } catch (error) {
       console.error('Failed to load maintenance orders:', error);
     } finally {
@@ -57,6 +57,22 @@ export default function Maintenance() {
       console.error('Failed to load parts:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateStatus = async (orderId: string, status: string) => {
+    try {
+      const res = await fetch(`/api/maintenance/orders/${orderId}/status`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (res.ok) {
+        await loadOrders();
+        await loadParts();
+      }
+    } catch (error) {
+      console.error('Failed to update order status:', error);
     }
   };
 
@@ -289,7 +305,7 @@ export default function Maintenance() {
                         </p>
                       </td>
                       <td className="px-5 py-4 font-semibold text-gray-800">
-                        ¥{order.estimated_cost?.toLocaleString() || 0}
+                        ¥{order.total_cost?.toLocaleString() || order.estimated_cost?.toLocaleString() || 0}
                       </td>
                       <td className="px-5 py-4">
                         <span
@@ -301,9 +317,27 @@ export default function Maintenance() {
                         </span>
                       </td>
                       <td className="px-5 py-4">
-                        <button className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
-                          <MoreHorizontal size={18} className="text-gray-500" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {order.status === 'pending' && (
+                            <button
+                              onClick={() => handleUpdateStatus(order.id, 'in_progress')}
+                              className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
+                            >
+                              开始维修
+                            </button>
+                          )}
+                          {order.status === 'in_progress' && (
+                            <button
+                              onClick={() => handleUpdateStatus(order.id, 'completed')}
+                              className="px-3 py-1 text-xs bg-green-100 text-green-700 rounded-md hover:bg-green-200 transition-colors"
+                            >
+                              完成维保
+                            </button>
+                          )}
+                          {order.status === 'completed' && (
+                            <span className="text-xs text-gray-400">已完成</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -357,7 +391,7 @@ export default function Maintenance() {
                         </div>
                       </td>
                       <td className="px-5 py-4 text-sm text-gray-600">
-                        {part.spec || '标准款'}
+                        {part.sku || '标准款'}
                       </td>
                       <td className="px-5 py-4">
                         <span
@@ -367,14 +401,14 @@ export default function Maintenance() {
                               : 'text-gray-800'
                           }`}
                         >
-                          {part.quantity || 0} {part.unit || '件'}
+                          {part.quantity || 0} 件
                         </span>
                       </td>
                       <td className="px-5 py-4 text-sm text-gray-600">
-                        {part.min_stock || 0} {part.unit || '件'}
+                        {part.min_stock || 0} 件
                       </td>
                       <td className="px-5 py-4 font-semibold text-gray-800">
-                        ¥{part.price?.toLocaleString() || 0}
+                        ¥{part.unit_price?.toLocaleString() || part.price?.toLocaleString() || 0}
                       </td>
                       <td className="px-5 py-4">
                         <button className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
